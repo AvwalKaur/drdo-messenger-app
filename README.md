@@ -40,8 +40,9 @@ When the user opens the messenger:
 
 ### Deployed Link : https://drdo-messenger.onrender.com/ 
 
-### Web Messenger UI
-<img src="Photo%201.jpg" alt="Messenger UI" width="300"/>
-### Connection 
-<img src="Photo%202.jpg" alt="Chat Screenshot" width="300"/>
+### -> Web Messenger UI
+<img src="Photo%201.jpg" alt="Messenger UI" width="500"/>
+
+### -> Connection 
+<img src="Photo%202.jpg" alt="Chat Screenshot" width="500"/>
 The blue colored wire is the ethernet cable ( CAT-6) that is serving as the transmission media for transferring the messages.
