@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DRDO Messenger</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <aside class="sidebar">
+      <h2>Online Users</h2>
+      <ul id="users-list" class="users-list"></ul>
+    </aside>
+
+    <main class="chat-area">
+      <ul id="messages" class="messages"></ul>
+      <form id="form" autocomplete="off">
+        <input id="input" placeholder="Type your message..." />
+        <button>Send</button>
+      </form>
+    </main>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
