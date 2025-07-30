@@ -39,3 +39,9 @@ When the user opens the messenger:
 5. When a user sends a message, it is received by the server and broadcast in real-time to all other online users.
 
 ### Deployed Link : https://drdo-messenger.onrender.com/ 
+
+### Web Messenger UI
+![Messenger UI](Photo%201.jpg)
+### Connection 
+![Chat Screenshot](Photo%202.jpg)
+The blue colored wire is the ethernet cable ( CAT-6) that is serving as the transmission media for transferring the messages.
