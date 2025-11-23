@@ -12,7 +12,7 @@ const server = http.createServer(app);
 const io = socketIO(server);
 
 // MongoDB Connection
-mongoose.connect("mongodb+srv://avwalindia_db_user:Bond!19@cluster0.m8jad5h.mongodb.net/messengerApp?retryWrites=true&w=majority&appName=Cluster0")
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
   .catch(err => console.log(err));
 
@@ -423,4 +423,5 @@ const PORT = process.env.PORT || 5600;
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
 
