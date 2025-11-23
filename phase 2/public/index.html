@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Secure Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+
+<body class="flex h-screen bg-gray-100">
+  <!-- Contacts List -->
+  <div class="w-1/4 bg-white border-r p-4 flex flex-col">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold">Contacts</h2>
+      <button id="createGroupBtn" class="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 text-sm">
+        Create Group
+      </button>
+    </div>
+
+    <div class="flex border-b mb-2">
+      <button id="showContacts" class="flex-1 py-1 font-medium border-b-2 border-blue-500">Contacts</button>
+      <button id="showGroups" class="flex-1 py-1 font-medium text-gray-500">Groups</button>
+    </div>
+
+    <div id="contacts-section">
+      <ul id="contact-list" class="flex-1 overflow-y-auto space-y-2"></ul>
+    </div>
+
+    <div id="groups-section" class="hidden">
+      <ul id="group-list" class="flex-1 overflow-y-auto space-y-2"></ul>
+    </div>
+
+    <div class="mt-auto">
+      <button id="inviteBtn" class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
+        Invite New User
+      </button>
+      <p id="inviteLink" class="mt-2 text-sm text-blue-600 break-all hidden"></p>
+    </div>
+  </div>
+
+  <!-- Chat Area -->
+  <div class="flex-1 flex flex-col">
+    <div id="chat-header" class="p-4 border-b bg-white">
+      <div class="flex justify-between items-center">
+        <h3 id="current-chat-user" class="text-lg font-semibold">Select a contact to chat</h3>
+        <button id="delete-chat-btn" class="text-red-500 hover:text-red-700 hidden">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </div>
+      <div id="group-members" class="text-sm text-gray-500 mt-1 hidden"></div>
+    </div>
+    <div id="chat-messages" class="flex-1 p-4 overflow-y-auto bg-gray-50"></div>
+    <div class="p-4 border-t bg-white">
+      <div class="flex">
+        <input id="message-input" type="text" placeholder="Type a message..."
+          class="flex-1 p-2 border rounded-l focus:outline-none">
+        <button id="send-btn" class="bg-blue-500 text-white px-4 py-2 rounded-r hover:bg-blue-600">
+          Send
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Group Modal -->
+  <div id="createGroupModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-white p-6 rounded-lg w-96">
+      <h3 class="text-xl font-bold mb-4">Create New Group</h3>
+      <div class="mb-4">
+        <label for="group-name" class="block text-sm font-medium mb-1">Group Name</label>
+        <input type="text" id="group-name" class="w-full p-2 border rounded">
+      </div>
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-1">Select Members</label>
+        <div id="group-member-select" class="max-h-40 overflow-y-auto border p-2 rounded"></div>
+      </div>
+      <div class="flex justify-end space-x-2">
+        <button id="cancel-group" class="px-4 py-2 border rounded">Cancel</button>
+        <button id="confirm-group" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Get URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const myId = urlParams.get('user') || 'default-user';
+    const senderId = urlParams.get('sender');
+
+    // DOM Elements
+    const contactList = document.getElementById('contact-list');
+    const groupList = document.getElementById('group-list');
+    const chatMessages = document.getElementById('chat-messages');
+    const messageInput = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
+    const inviteBtn = document.getElementById('inviteBtn');
+    const inviteLink = document.getElementById('inviteLink');
+    const currentChatUserElement = document.getElementById('current-chat-user');
+    const deleteChatBtn = document.getElementById('delete-chat-btn');
+    const groupMembersElement = document.getElementById('group-members');
+    const createGroupBtn = document.getElementById('createGroupBtn');
+    const createGroupModal = document.getElementById('createGroupModal');
+    const groupNameInput = document.getElementById('group-name');
+    const groupMemberSelect = document.getElementById('group-member-select');
+    const confirmGroupBtn = document.getElementById('confirm-group');
+    const cancelGroupBtn = document.getElementById('cancel-group');
+    const showContactsBtn = document.getElementById('showContacts');
+    const showGroupsBtn = document.getElementById('showGroups');
+    const contactsSection = document.getElementById('contacts-section');
+    const groupsSection = document.getElementById('groups-section');
+
+    // Socket.io connection
+    const socket = io();
+    let currentChatUser = senderId || null;
+    let currentChatType = 'contact'; // 'contact' or 'group'
+    let contacts = [];
+    let groups = [];
+
+    // Initialize
+    socket.emit('register', myId);
+    socket.emit('request-contacts', myId);
+
+    // Handle contact deletion
+    contactList.addEventListener('click', async (e) => {
+      if (e.target.closest('.delete-contact-btn')) {
+        const contactToDelete = e.target.closest('.delete-contact-btn').dataset.contact;
+        if (confirm(`Are you sure you want to delete ${contactToDelete} from your contacts?`)) {
+          try {
+            const response = await fetch('/delete-contact', {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                userId: myId,
+                contactId: contactToDelete
+              })
+            });
+
+            if (!response.ok) {
+              throw new Error('Failed to delete contact');
+            }
+          } catch (err) {
+            console.error('Error deleting contact:', err);
+            alert('Failed to delete contact');
+          }
+        }
+      }
+    });
+
+    // Handle group deletion
+    groupList.addEventListener('click', async (e) => {
+      if (e.target.closest('.delete-group-btn')) {
+        const groupId = e.target.closest('.delete-group-btn').dataset.group;
+        if (confirm('Are you sure you want to delete this group? This action cannot be undone.')) {
+          try {
+            socket.emit('delete-group', {
+              groupId: groupId,
+              userId: myId
+            });
+          } catch (err) {
+            console.error('Error deleting group:', err);
+            alert('Failed to delete group');
+          }
+        }
+      }
+    });
+
+    // Handle group deletion confirmation
+    socket.on('group-deleted', ({ groupId }) => {
+      if (currentChatUser === groupId) {
+        currentChatUser = null;
+        currentChatType = 'contact';
+        currentChatUserElement.textContent = 'Select a contact to chat';
+        chatMessages.innerHTML = '';
+        deleteChatBtn.classList.add('hidden');
+        groupMembersElement.classList.add('hidden');
+      }
+    });
+
+    // Handle group creation
+    createGroupBtn.addEventListener('click', () => {
+      // Populate member selection
+      groupMemberSelect.innerHTML = '';
+      contacts.forEach(contact => {
+        const div = document.createElement('div');
+        div.className = 'flex items-center mb-1';
+        div.innerHTML = `
+          <input type="checkbox" id="member-${contact.otherUser}" value="${contact.otherUser}" 
+            class="mr-2">
+          <label for="member-${contact.otherUser}">${contact.otherUser}</label>
+        `;
+        groupMemberSelect.appendChild(div);
+      });
+
+      createGroupModal.classList.remove('hidden');
+    });
+
+    confirmGroupBtn.addEventListener('click', () => {
+      const groupName = groupNameInput.value.trim();
+      if (!groupName) {
+        alert('Please enter a group name');
+        return;
+      }
+
+      const selectedMembers = [];
+      groupMemberSelect.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+        selectedMembers.push(checkbox.value);
+      });
+
+      if (selectedMembers.length === 0) {
+        alert('Please select at least one member');
+        return;
+      }
+
+      socket.emit('create-group', {
+        creatorId: myId,
+        groupName: groupName,
+        members: selectedMembers
+      });
+
+      createGroupModal.classList.add('hidden');
+      groupNameInput.value = '';
+    });
+
+    cancelGroupBtn.addEventListener('click', () => {
+      createGroupModal.classList.add('hidden');
+      groupNameInput.value = '';
+    });
+
+    // Generate invite link - UPDATED
+    inviteBtn.addEventListener('click', () => {
+      const code = Math.random().toString(36).substring(2, 8);
+      const link = `${window.location.origin}/join.html?from=${myId}&code=${code}`;
+      inviteLink.textContent = link;
+      inviteLink.href = link;
+      inviteLink.classList.remove('hidden');
+    });
+
+    // Contact list updates
+    socket.on('update-contacts', (data) => {
+      contacts = data.contacts || [];
+      groups = data.groups || [];
+
+      // Render contacts
+      contactList.innerHTML = '';
+      contacts.forEach(contact => {
+        const otherUser = contact.otherUser;
+        const li = document.createElement('li');
+        li.className = 'p-2 hover:bg-gray-100 rounded cursor-pointer';
+        li.innerHTML = `
+          <div class="flex justify-between items-center">
+            <span>${otherUser}</span>
+            <button class="delete-contact-btn text-red-500 hover:text-red-700 p-1" data-contact="${otherUser}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+        `;
+        li.addEventListener('click', (e) => {
+          if (!e.target.closest('.delete-contact-btn')) {
+            currentChatUser = otherUser;
+            currentChatType = 'contact';
+            currentChatUserElement.textContent = otherUser;
+            deleteChatBtn.classList.remove('hidden');
+            groupMembersElement.classList.add('hidden');
+            loadChatHistory(otherUser, false);
+          }
+        });
+        contactList.appendChild(li);
+      });
+
+      // Render groups
+      groupList.innerHTML = '';
+      groups.forEach(group => {
+        const li = document.createElement('li');
+        li.className = 'p-2 hover:bg-gray-100 rounded cursor-pointer';
+        li.innerHTML = `
+          <div class="flex justify-between items-center">
+            <span>${group.name}</span>
+            ${group.creator === myId ? `
+            <button class="delete-group-btn text-red-500 hover:text-red-700 p-1" data-group="${group._id}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+            ` : ''}
+          </div>
+        `;
+        li.addEventListener('click', (e) => {
+          if (!e.target.closest('.delete-group-btn')) {
+            currentChatUser = group._id;
+            currentChatType = 'group';
+            currentChatUserElement.textContent = group.name;
+            deleteChatBtn.classList.remove('hidden');
+
+            // Show group members
+            groupMembersElement.classList.remove('hidden');
+            groupMembersElement.innerHTML = `Members: ${group.members.join(', ')}`;
+
+            loadChatHistory(group._id, true);
+          }
+        });
+        groupList.appendChild(li);
+      });
+
+      // Auto-open chat with sender if available
+      if (senderId && !currentChatUser) {
+        const senderContact = contacts.find(c => c.otherUser === senderId);
+        if (senderContact) {
+          currentChatUser = senderId;
+          currentChatType = 'contact';
+          currentChatUserElement.textContent = senderId;
+          deleteChatBtn.classList.remove('hidden');
+          groupMembersElement.classList.add('hidden');
+          loadChatHistory(senderId, false);
+        }
+      }
+    });
+
+    // Handle new contact addition
+    socket.on('new-contact', (contact) => {
+      const existingContact = contacts.find(c =>
+        c.users.includes(contact.otherUser) && c.users.includes(myId)
+      );
+
+      if (!existingContact) {
+        contacts.push(contact);
+        renderContacts();
+
+        // Auto-open chat with inviter if applicable
+        if (contact.otherUser === senderId && !currentChatUser) {
+          currentChatUser = senderId;
+          currentChatType = 'contact';
+          currentChatUserElement.textContent = senderId;
+          deleteChatBtn.classList.remove('hidden');
+          groupMembersElement.classList.add('hidden');
+          loadChatHistory(senderId, false);
+        }
+      }
+    });
+
+    // Handle invite acceptance - NEW
+    socket.on('invite-accepted', ({ contactId, contactName }) => {
+      // Update our contacts list immediately
+      socket.emit('request-contacts', myId);
+    });
+
+    // Handle group creation - UPDATED
+    socket.on('group-created', (newGroup) => {
+      // Update groups list
+      groups.push(newGroup);
+      renderGroups();
+
+      // Auto-open the new group chat if creator
+      if (newGroup.creator === myId) {
+        currentChatUser = newGroup._id;
+        currentChatType = 'group';
+        currentChatUserElement.textContent = newGroup.name;
+        deleteChatBtn.classList.remove('hidden');
+        groupMembersElement.classList.remove('hidden');
+        groupMembersElement.innerHTML = `Members: ${newGroup.members.join(', ')}`;
+        loadChatHistory(newGroup._id, true);
+      }
+    });
+
+    // Helper function to render contacts - NEW
+    function renderContacts() {
+      contactList.innerHTML = '';
+      contacts.forEach(contact => {
+        const otherUser = contact.otherUser;
+        const li = document.createElement('li');
+        li.className = 'p-2 hover:bg-gray-100 rounded cursor-pointer';
+        li.innerHTML = `
+      <div class="flex justify-between items-center">
+        <span>${otherUser}</span>
+        <button class="delete-contact-btn text-red-500 hover:text-red-700 p-1" data-contact="${otherUser}">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </div>
+    `;
+        li.addEventListener('click', (e) => {
+          if (!e.target.closest('.delete-contact-btn')) {
+            currentChatUser = otherUser;
+            currentChatType = 'contact';
+            currentChatUserElement.textContent = otherUser;
+            deleteChatBtn.classList.remove('hidden');
+            groupMembersElement.classList.add('hidden');
+            loadChatHistory(otherUser, false);
+          }
+        });
+        contactList.appendChild(li);
+      });
+    }
+
+    // Helper function to render groups
+    function renderGroups() {
+      groupList.innerHTML = '';
+      groups.forEach(group => {
+        const li = document.createElement('li');
+        li.className = 'p-2 hover:bg-gray-100 rounded cursor-pointer';
+        li.innerHTML = `
+          <div class="flex justify-between items-center">
+            <span>${group.name}</span>
+            ${group.creator === myId ? `
+            <button class="delete-group-btn text-red-500 hover:text-red-700 p-1" data-group="${group._id}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+            ` : ''}
+          </div>
+        `;
+        li.addEventListener('click', (e) => {
+          if (!e.target.closest('.delete-group-btn')) {
+            currentChatUser = group._id;
+            currentChatType = 'group';
+            currentChatUserElement.textContent = group.name;
+            deleteChatBtn.classList.remove('hidden');
+
+            // Show group members
+            groupMembersElement.classList.remove('hidden');
+            groupMembersElement.innerHTML = `Members: ${group.members.join(', ')}`;
+
+            loadChatHistory(group._id, true);
+          }
+        });
+        groupList.appendChild(li);
+      });
+    }
+
+    // Delete current chat
+    deleteChatBtn.addEventListener('click', () => {
+      if (currentChatType === 'contact' && currentChatUser) {
+        if (confirm(`Are you sure you want to delete ${currentChatUser} from your contacts?`)) {
+          fetch('/delete-contact', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              userId: myId,
+              contactId: currentChatUser
+            })
+          });
+        }
+      } else if (currentChatType === 'group' && currentChatUser) {
+        if (confirm('Are you sure you want to delete this group? This action cannot be undone.')) {
+          socket.emit('delete-group', {
+            groupId: currentChatUser,
+            userId: myId
+          });
+        }
+      }
+    });
+
+    // Toggle between contacts and groups
+    showContactsBtn.addEventListener('click', () => {
+      showContactsBtn.classList.add('border-b-2', 'border-blue-500');
+      showContactsBtn.classList.remove('text-gray-500');
+      showGroupsBtn.classList.remove('border-b-2', 'border-blue-500');
+      showGroupsBtn.classList.add('text-gray-500');
+      contactsSection.classList.remove('hidden');
+      groupsSection.classList.add('hidden');
+    });
+
+    showGroupsBtn.addEventListener('click', () => {
+      showGroupsBtn.classList.add('border-b-2', 'border-blue-500');
+      showGroupsBtn.classList.remove('text-gray-500');
+      showContactsBtn.classList.remove('border-b-2', 'border-blue-500');
+      showContactsBtn.classList.add('text-gray-500');
+      groupsSection.classList.remove('hidden');
+      contactsSection.classList.add('hidden');
+    });
+
+    // Load chat history
+    async function loadChatHistory(chatId, isGroup) {
+      try {
+        const response = await fetch(`/messages?from=${myId}&to=${chatId}&isGroup=${isGroup}`);
+        const messages = await response.json();
+        chatMessages.innerHTML = '';
+        messages.forEach(msg => displayMessage(msg, isGroup));
+      } catch (err) {
+        console.error('Error loading chat history:', err);
+      }
+    }
+
+    // Display message
+    function displayMessage(msg, isGroup = false) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `mb-2 ${msg.from === myId ? 'text-right' : 'text-left'}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = `inline-block p-2 rounded-lg max-w-xs ${msg.from === myId ? 'bg-blue-500 text-white' : 'bg-gray-200'}`;
+      bubble.textContent = msg.content;
+
+      const meta = document.createElement('div');
+      meta.className = 'text-xs mt-1 text-gray-500';
+
+      let senderName = msg.from;
+      if (isGroup && msg.from !== myId) {
+        const contact = contacts.find(c => c.otherUser === msg.from);
+        senderName = contact ? contact.userName || msg.from : msg.from;
+      }
+
+      meta.textContent = `${msg.from === myId ? 'You' : senderName} • ${new Date(msg.timestamp).toLocaleTimeString()}`;
+
+      messageDiv.appendChild(bubble);
+      messageDiv.appendChild(meta);
+      chatMessages.appendChild(messageDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    function sendMessage() {
+      const content = messageInput.value.trim();
+      if (!content || !currentChatUser) return;
+
+      const message = {
+        from: myId,
+        to: currentChatUser,
+        content: content,
+        isGroup: currentChatType === 'group' // IMPORTANT: let server know it's a group message
+      };
+
+      socket.emit('send-message', message);
+      messageInput.value = '';
+    }
+
+
+    socket.on('receive-message', (msg) => {
+      // Individual message (one-to-one)
+      if (!msg.isGroup) {
+        if ((msg.from === currentChatUser && msg.to === myId) ||
+          (msg.to === currentChatUser && msg.from === myId)) {
+          displayMessage(msg, false);
+        }
+        return;
+      }
+
+      // Group message
+      // msg.to is the groupId; show if current open chat is that group
+      if (msg.isGroup && currentChatType === 'group' && msg.to === currentChatUser) {
+        displayMessage(msg, true);
+      }
+    });
+
+
+    // Event listeners
+    sendBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+  </script>
+</body>
+
+</html>
