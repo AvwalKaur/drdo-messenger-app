@@ -46,3 +46,35 @@ When the user opens the messenger:
 ### -> Connection 
 <img src="Photo%202.jpg" alt="Chat Screenshot" width="500"/>
 The blue colored wire is the ethernet cable ( CAT-6) that is serving as the transmission media for transferring the messages.
+
+
+## Phase 2 : One-to-One and Group Web Messenger
+## How it Works ?
+
+Phase 2 extends our previous broadcast messenger to support private one-to-one chats and group messaging. Users can now create groups, invite others, and chat in real-time over the internet.
+
+### Frontend
+
+Contacts & Groups List – Shows all your friends and groups.
+Chat Box – Write messages for individuals or groups.
+
+### Backend
+
+Built with Node.js and Express.js.
+Socket.io handles real-time messaging.
+MongoDB stores contacts, groups, and messages.
+Each user and group has its own socket room, enabling instant message delivery.
+
+### Client Logic
+
+Users register with a name or ID.
+Can send messages to contacts or groups.
+Messages are updated live on all connected clients.
+
+### Server Logic
+
+Maintains active users and their sockets.
+Handles creating/deleting contacts and groups.
+Emits new messages in real-time to relevant users or group members.
+
+### Deployed Link : https://drdo-messenger-app-1.onrender.com
