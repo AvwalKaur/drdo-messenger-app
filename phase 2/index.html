@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Secure Chat</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; display: flex; height: 100vh; }
+    .sidebar {
+      width: 30%;
+      background-color: #f0f0f0;
+      padding: 20px;
+      border-right: 1px solid #ccc;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .user-list { flex-grow: 1; margin-bottom: 20px; }
+    .user-list h3 { margin-bottom: 10px; }
+    .invite-section button {
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      width: 100%;
+      border-radius: 4px;
+    }
+    .invite-section button:hover { background-color: #45a049; }
+    .chat-section {
+      flex: 1;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #fff;
+    }
+    .chat-placeholder {
+      font-size: 1.2rem;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="user-list">
+      <h3>List of Invited Users:</h3>
+      <ul id="invitedUsersList"></ul>
+    </div>
+    <div class="invite-section">
+      <button onclick="generateInvite()">Generate Invite Link</button>
+    </div>
+  </div>
+
+  <div class="chat-section">
+    <div class="chat-placeholder">Chats will appear here</div>
+  </div>
+
+  <!-- ✅ Load Socket.IO -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <!-- ✅ Your JavaScript -->
+  <script>
+    function generateInvite() {
+      const fromUser = prompt("Enter your username:");
+      if (!fromUser) return;
+      const code = Math.random().toString(36).substring(2, 10);
+      const inviteLink = `${window.location.origin}/join.html?from=${fromUser}&code=${code}`;
+      navigator.clipboard.writeText(inviteLink).then(() => {
+        alert("Invite link copied to clipboard:\n" + inviteLink);
+      }).catch(err => {
+        alert("Failed to copy invite link. Here's the link:\n" + inviteLink);
+      });
+    }
+
+    const socket = io();
+    const currentUser = new URLSearchParams(window.location.search).get('user') || 
+                        new URLSearchParams(window.location.search).get('from');
+
+    socket.emit('register', currentUser);
+
+    socket.on('new-invite-accepted', ({ name, addedBy }) => {
+      if (addedBy === currentUser) {
+        const list = document.getElementById('invitedUsersList');
+        const li = document.createElement('li');
+        li.textContent = name;
+        list.appendChild(li);
+      }
+    });
+  </script>
+</body>
+</html>
