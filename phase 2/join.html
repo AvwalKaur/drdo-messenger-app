@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Accept Invitation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+
+<body class="flex items-center justify-center h-screen bg-gray-100">
+  <div class="bg-white p-8 rounded-lg shadow-md w-96">
+    <h1 class="text-2xl font-bold mb-4 text-center">Join Chat</h1>
+    <div id="invite-info" class="mb-6 p-3 bg-blue-50 rounded">
+      <p id="inviter-info" class="text-center"></p>
+    </div>
+
+    <div class="space-y-4">
+      <div>
+        <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
+        <input type="text" id="name" required
+          class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+
+      <div>
+        <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+        <input type="tel" id="phone" required
+          class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500" pattern="[0-9]{10,15}"
+          title="10-15 digit phone number">
+      </div>
+
+      <button id="join-btn" class="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600">
+        Join Chat
+      </button>
+
+      <div id="error-message" class="text-red-500 text-sm mt-2 hidden"></div>
+      <div id="loading" class="text-center text-blue-500 hidden">
+        <p>Connecting you to the chat...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Get invitation details
+    const urlParams = new URLSearchParams(window.location.search);
+    const from = urlParams.get('from');
+    const code = urlParams.get('code');
+
+    // Check for valid invitation
+    if (!from || !code) {
+      document.getElementById('inviter-info').textContent = 'Invalid invitation link!';
+      document.getElementById('join-btn').disabled = true;
+      document.getElementById('error-message').textContent = 'This invitation link is missing required parameters.';
+      document.getElementById('error-message').classList.remove('hidden');
+    } else {
+      document.getElementById('inviter-info').textContent = `${from} has invited you to chat!`;
+    }
+
+    // Socket.io connection
+    const socket = io();
+
+    // Join chat handler
+    document.getElementById('join-btn').addEventListener('click', async () => {
+      const name = document.getElementById('name').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+      const errorElement = document.getElementById('error-message');
+      const loadingElement = document.getElementById('loading');
+
+      // Validate inputs
+      errorElement.classList.add('hidden');
+
+      if (!name) {
+        errorElement.textContent = 'Please enter your name';
+        errorElement.classList.remove('hidden');
+        return;
+      }
+
+      if (!phone) {
+        errorElement.textContent = 'Please enter your phone number';
+        errorElement.classList.remove('hidden');
+        return;
+      }
+
+      if (!/^\d+$/.test(phone)) {
+        errorElement.textContent = 'Phone number should contain only digits';
+        errorElement.classList.remove('hidden');
+        return;
+      }
+
+      // Show loading state
+      loadingElement.classList.remove('hidden');
+      document.getElementById('join-btn').disabled = true;
+
+      try {
+        // Register with socket.io
+        socket.emit('register', phone);
+
+        // Send acceptance to server
+        const response = await fetch('/accept-invite', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: from,
+            to: phone,
+            name: name,
+            code: code
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to join chat');
+        }
+
+        // Store user data and redirect
+        localStorage.setItem('chatUser', JSON.stringify({
+          name: name,
+          phone: phone,
+          from: from
+        }));
+
+        window.location.href = `/index.html?user=${encodeURIComponent(phone)}&sender=${encodeURIComponent(from)}`;
+      } catch (error) {
+        console.error('Error joining chat:', error);
+        errorElement.textContent = error.message;
+        errorElement.classList.remove('hidden');
+        loadingElement.classList.add('hidden');
+        document.getElementById('join-btn').disabled = false;
+      }
+    });
+
+    // Handle connection errors
+    socket.on('connect_error', (error) => {
+      console.error('Connection error:', error);
+      document.getElementById('error-message').textContent = 'Connection error. Please refresh and try again.';
+      document.getElementById('error-message').classList.remove('hidden');
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('join-btn').disabled = false;
+    });
+  </script>
+</body>
+
+</html>
