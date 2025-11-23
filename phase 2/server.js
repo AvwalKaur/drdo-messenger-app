@@ -12,12 +12,9 @@ const server = http.createServer(app);
 const io = socketIO(server);
 
 // MongoDB Connection
-mongoose.connect('mongodb://127.0.0.1:27017/secure-chat', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-  .then(() => console.log('MongoDB Connected'))
-  .catch(err => console.log('MongoDB Connection Error:', err));
+mongoose.connect("mongodb+srv://avwalindia_db_user:Bond!19@cluster0.m8jad5h.mongodb.net/messengerApp?retryWrites=true&w=majority&appName=Cluster0")
+  .then(() => console.log("MongoDB connected"))
+  .catch(err => console.log(err));
 
 // Middleware
 app.use(express.static(path.join(__dirname, 'public')));
@@ -426,3 +423,4 @@ const PORT = process.env.PORT || 5600;
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
