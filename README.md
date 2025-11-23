@@ -73,5 +73,4 @@ Phase 2 extends our previous broadcast messenger to support private one-to-one c
 - Handles creating/deleting contacts and groups.
 - Emits new messages in real-time to relevant users or group members.
 
-### Deployed Link
-[Open Messenger](https://drdo-messenger-app-1.onrender.com)
+### Deployed Link : https://drdo-messenger-app-1.onrender.com
